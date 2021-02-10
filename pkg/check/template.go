@@ -25,7 +25,7 @@ type Template struct {
 	Description          string
 	SupportedObjectKinds ObjectKindsDesc
 
-	Parameters             []ParameterDesc
-	ParseAndValidateParams func(params map[string]interface{}) (interface{}, error)
-	Instantiate            func(parsedParams interface{}) (Func, error)
+	Parameters             []ParameterDesc // TODO: use HumanReadableParamDesc for json output instead
+	ParseAndValidateParams func(params map[string]interface{}) (interface{}, error) `json:"-"`
+	Instantiate            func(parsedParams interface{}) (Func, error)             `json:"-"`
 }
