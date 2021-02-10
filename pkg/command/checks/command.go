@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.stackrox.io/kube-linter/internal/defaultchecks"
+	"golang.stackrox.io/kube-linter/internal/flagutil"
 	"golang.stackrox.io/kube-linter/internal/stringutils"
 	"golang.stackrox.io/kube-linter/pkg/builtinchecks"
 	"golang.stackrox.io/kube-linter/pkg/check"
@@ -18,7 +19,9 @@ import (
 var (
 	dashes = stringutils.Repeat("-", 30)
 
-	formatsToRenderFuncs = map[string]func([]check.Check, io.Writer) error{
+	outputFormats = flagutil.NewEnumValueFactory("Output format", []string{common.PlainFormat, common.MarkdownFormat})
+
+	formatters = map[string]func([]check.Check, io.Writer) error{
 		common.PlainFormat:    renderPlain,
 		common.MarkdownFormat: renderMarkdown,
 	}
@@ -64,7 +67,7 @@ func renderMarkdown(checks []check.Check, out io.Writer) error {
 }
 
 func listCommand() *cobra.Command {
-	format := common.FormatValueFactory(common.PlainFormat)
+	format := outputFormats(common.PlainFormat)
 	c := &cobra.Command{
 		Use:   "list",
 		Short: "List built-in checks",
@@ -77,7 +80,7 @@ func listCommand() *cobra.Command {
 			sort.Slice(checks, func(i, j int) bool {
 				return checks[i].Name < checks[j].Name
 			})
-			renderFunc := formatsToRenderFuncs[format.String()]
+			renderFunc := formatters[format.String()]
 			if renderFunc == nil {
 				return errors.Errorf("unknown format: %q", format.String())
 			}
