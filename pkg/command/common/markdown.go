@@ -8,7 +8,7 @@ import (
 	"golang.stackrox.io/kube-linter/internal/utils"
 )
 
-// MustInstantiateTemplate instanties the given go template with a common list of
+// MustInstantiateTemplate instantiates the given go template with a common list of
 // functions. It panics if there is an error.
 func MustInstantiateTemplate(templateStr string, customFuncMap template.FuncMap) *template.Template {
 	tpl, err := template.New("").Funcs(sprig.TxtFuncMap()).Funcs(
@@ -19,8 +19,12 @@ func MustInstantiateTemplate(templateStr string, customFuncMap template.FuncMap)
 			"codeSnippetInTable": func(code string) string {
 				return "`" + strings.ReplaceAll(code, "|", `\|`) + "`"
 			},
-			"codeBlock": func(code string) string {
-				return "```\n" + code + "\n```"
+			"codeBlock": func(lang, code string) string {
+				finalNewline := "\n"
+				if strings.HasSuffix(code, "\n") {
+					finalNewline = ""
+				}
+				return "```" + lang + "\n" + code + finalNewline + "```"
 			},
 		},
 	).Funcs(customFuncMap).Parse(templateStr)
