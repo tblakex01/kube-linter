@@ -1,24 +1,47 @@
 package checks
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"sort"
+	"text/template"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.stackrox.io/kube-linter/internal/defaultchecks"
 	"golang.stackrox.io/kube-linter/internal/flagutil"
-	"golang.stackrox.io/kube-linter/internal/stringutils"
 	"golang.stackrox.io/kube-linter/pkg/builtinchecks"
 	"golang.stackrox.io/kube-linter/pkg/check"
 	"golang.stackrox.io/kube-linter/pkg/command/common"
 )
 
-var (
-	dashes = stringutils.Repeat("-", 30)
+const (
+	plainTemplateStr = `{{ range $i, $_ := . }}
+{{- if $i}}
+------------------------------
 
+{{end -}}
+Name: {{.Name}}
+Description: {{.Description}}
+Remediation: {{.Remediation}}
+Template: {{.Template}}
+Parameters: {{.Params}}
+Enabled by default: {{ isDefault . }}
+{{end -}}
+`
+
+	markDownTemplateStr = `# KubeLinter checks
+
+KubeLinter includes the following built-in checks:
+
+| Name | Enabled by default | Description | Remediation | Template | Parameters |
+| ---- | ------------------ | ----------- | ----------- | -------- | ---------- |
+{{ range . }} | {{.Name}} | {{ if isDefault . }}Yes{{ else }}No{{ end }} | {{.Description}} | {{.Remediation}} | {{.Template}} | {{ mustToJson (default (dict) .Params ) | codeSnippetInTable }} |
+{{ end -}}
+`
+)
+
+var (
 	outputFormats = flagutil.NewEnumValueFactory("Output format", []string{common.PlainFormat, common.MarkdownFormat, common.JsonFormat})
 
 	formatters = map[string]func([]check.Check, io.Writer) error{
@@ -30,43 +53,23 @@ var (
 	}
 )
 
-func renderPlain(checks []check.Check, out io.Writer) error { //nolint:unparam // The function signature is required to match formatToRenderFuncs
-	for i, chk := range checks {
-		fmt.Fprintf(out, "Name: %s\nDescription: %s\nRemediation: %s\nTemplate: %s\nParameters: %v\nEnabled by default: %v\n",
-			chk.Name, chk.Description, chk.Remediation, chk.Template, chk.Params, defaultchecks.List.Contains(chk.Name))
-		if i != len(checks)-1 {
-			fmt.Fprintf(out, "\n%s\n\n", dashes)
-		}
+var (
+	checksFuncMap = template.FuncMap{
+		"isDefault": func(check check.Check) bool {
+			return defaultchecks.List.Contains(check.Name)
+		},
 	}
-	return nil
+
+	plainTemplate    = common.MustInstantiateTemplate(plainTemplateStr, checksFuncMap)
+	markDownTemplate = common.MustInstantiateTemplate(markDownTemplateStr, checksFuncMap)
+)
+
+func renderPlain(checks []check.Check, out io.Writer) error {
+	return plainTemplate.Execute(out, checks)
 }
 
-const (
-	markDownTemplateStr = `# KubeLinter checks
-
-KubeLinter includes the following built-in checks:
-
-| Name | Enabled by default | Description | Remediation | Template | Parameters |
-| ---- | ------------------ | ----------- | ----------- | -------- | ---------- |
-{{ range . }} | {{ .Check.Name}} | {{ if .Default }}Yes{{ else }}No{{ end }} | {{.Check.Description}} | {{.Check.Remediation}} | {{.Check.Template}} | {{ mustToJson (default (dict) .Check.Params ) | codeSnippetInTable }} |
-{{ end -}}
-`
-)
-
-var (
-	markDownTemplate = common.MustInstantiateTemplate(markDownTemplateStr, nil)
-)
-
 func renderMarkdown(checks []check.Check, out io.Writer) error {
-	type augmentedCheck struct {
-		Check   check.Check
-		Default bool
-	}
-	augmentedChecks := make([]augmentedCheck, 0, len(checks))
-	for _, chk := range checks {
-		augmentedChecks = append(augmentedChecks, augmentedCheck{Check: chk, Default: defaultchecks.List.Contains(chk.Name)})
-	}
-	return markDownTemplate.Execute(out, augmentedChecks)
+	return markDownTemplate.Execute(out, checks)
 }
 
 func listCommand() *cobra.Command {
